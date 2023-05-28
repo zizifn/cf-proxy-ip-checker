@@ -68,7 +68,7 @@ export default async function Home({ searchParams }) {
         });
 
         const cfIp = maps.find(item => item.key === 'ip').value;
-        result.title = `proxy ip is ${ip}, cloudflare ip is ${cfIp},  ${ip === cfIp ? 'can(可以)' : 'can not (不能)'} use as proxy ip.`;
+        result.title = `proxy ip is ${ip}, cloudflare show client ip is ${cfIp},  ${ip === cfIp ? 'can(可以)' : 'can not (不能)'} use as proxy ip.`;
         result.full = `
 -------------full curl -v https://cloudflare.com/cdn-cgi/trace --resolve cloudflare.com:${ip}--------------
 ${text}
