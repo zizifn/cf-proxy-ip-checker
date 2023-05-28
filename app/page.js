@@ -1,95 +1,103 @@
 import Image from 'next/image'
 import styles from './page.module.css'
+import { parse } from 'ipaddr.js'
+import https from "https";
 
-export default function Home() {
+export default async function Home({ searchParams }) {
+  console.log(searchParams);
+  const ip = searchParams.ip;
+  let addr = null;
+  try{
+    addr = parse(ip);
+  }catch(e){
+    return (
+      <main className={styles.main}>
+        <h1 className={styles.title}>
+          no ipput ip or ip is not ipv4/6. {e.message}
+        </h1>
+      </main>
+    )
+  }
+
+  const ipKind = addr.kind()// 'ipv4' or 'ipv6'
+  let family = 4;
+  if (ipKind === 'ipv6') {
+    family = 6;
+  }
+
+  let result = {
+    title: '',
+    full: ''
+  }
+  await new Promise((resolve, reject) => {
+    const rep = https.request({
+      hostname: 'www.cloudflare.com',
+      path: '/cdn-cgi/trace',
+      method: 'GET',
+      agent: new https.Agent({
+        lookup: (hostname, options, callback) => {
+          callback(null, ip, family);
+        }
+      })
+    }, (res) => {
+      res.on('data', (d) => {
+        // fl=466f72
+        // ip=
+        // ts=1685291358.926
+        // visit_scheme=https
+        // uag=
+        // colo=SJC
+        // sliver=none
+        // visit_scheme=https
+        // uag=
+        // colo=SJC
+        // sliver=none
+        // http=http/1.1
+        // loc=CN
+        // tls=TLSv1.3
+        // sni=plaintext
+        // warp=off
+        // gateway=off
+        // rbi=off
+        // kex=X25519
+
+        const text = d.toString();
+        const maps = text.split('\n').map(line => {
+          const [key, value] = line.split('=');
+          return { key: key.trim(), value };
+        });
+
+        const cfIp = maps.find(item => item.key === 'ip').value;
+        result.title = `proxy ip is ${ip}, cloudflare ip is ${cfIp},  ${ip === cfIp ? 'can(可以)' : 'can not (不能)'} use as proxy ip.`;
+        result.full = `
+-------------full curl -v https://cloudflare.com/cdn-cgi/trace --resolve cloudflare.com:${ip}--------------
+${text}
+`;
+      })
+      res.on('end', () => {
+        console.log('No more data in response.');
+        resolve(result);
+      });
+
+      res.on('error', (e) => {
+        reject(e.message);
+      });
+    });
+    rep.on('error', (e) => {
+      reject(e.message);
+    });
+    rep.end();
+  });
+
+
   return (
     <main className={styles.main}>
-      <div className={styles.description}>
-        <p>
-          Get started by editing&nbsp;
-          <code className={styles.code}>app/page.js</code>
-        </p>
-        <div>
-          <a
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className={styles.vercelLogo}
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
-        </div>
-      </div>
-
-      <div className={styles.center}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className={styles.grid}>
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Docs <span>-&gt;</span>
-          </h2>
-          <p>Find in-depth information about Next.js features and API.</p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Learn <span>-&gt;</span>
-          </h2>
-          <p>Learn about Next.js in an interactive course with&nbsp;quizzes!</p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Templates <span>-&gt;</span>
-          </h2>
-          <p>Explore the Next.js 13 playground.</p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Deploy <span>-&gt;</span>
-          </h2>
-          <p>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
+      <h1>
+        {result.title}
+      </h1>
+      <pre>
+        {result.full}
+      </pre>
     </main>
   )
 }
